@@ -5,7 +5,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import time , xmltodict
+import time , xmltodict , sys
 
 def handle_input():
     return pd.read_excel('week4/File_input/input_FPT.xlsx', dtype=str)
@@ -38,19 +38,30 @@ def process_fpt_invoice(driver, url, ma_so_thue, ma_tra_cuu):
     #nhấn nút tra cứu
     xpath_btn_search = "/html/body/div[3]/div/div/div[3]/div/div[1]/div/div[4]/div[2]/div/button"
     driver.find_element(By.XPATH, xpath_btn_search).click()
+    
+    # Đợi 2 giây để trang xử lý
+    time.sleep(2)
 
-    wait = WebDriverWait(driver, 10)
-    btn_tai_xml = wait.until(
-        EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Tải XML')]"))
-    )
-    btn_tai_xml.click()
-              
-
-    print(f"Đã tải hóa đơn FPT cho mã: {ma_tra_cuu}")
-
-    if check_load_success(driver):
-        return True
-    if check_load_fail(driver):
+    # Kiểm tra trạng thái tra cứu
+    status = check_load(driver)
+    
+    if status == 'fail':
+        print(f"Tra cứu thất bại cho mã: {ma_tra_cuu}")
+        return False
+    elif status == 'success':
+        # Nếu thành công thì tải XML
+        try:
+            btn_tai_xml = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Tải XML')]"))
+            )
+            btn_tai_xml.click()
+            print(f"Đã tải hóa đơn FPT thành công cho mã: {ma_tra_cuu}")
+            return True
+        except Exception as e:
+            print(f"lỗi khi tải XML cho mã {ma_tra_cuu}: {e}")
+            return False
+    else:  # status == 'unknown'
+        print(f" Không thể xác định trạng thái cho mã: {ma_tra_cuu}")
         return False
     
 def process_misa_invoice(driver, url, ma_so_thue, ma_tra_cuu):
@@ -113,10 +124,48 @@ def process_van_invoice(driver, url, ma_so_thue, ma_tra_cuu):
     time.sleep(1)
 
 
-def check_load_success(driver):
-    pass
-def  check_load_fail(driver):
-    pass
+def check_load(driver):
+    """Kiểm tra trạng thái tra cứu hóa đơn - Trả về 'success', 'fail', hoặc 'unknown'"""
+    try:
+        # Bước 1: Kiểm tra thông báo lỗi trước (nhanh hơn)
+        error_messages = [
+            "Không tìm thấy hóa đơn",
+            "Mã tra cứu không đúng", 
+            "Không tồn tại",
+            "Hóa đơn không hợp lệ",
+            "Lỗi tra cứu",
+            "Thông tin không chính xác"
+        ]
+        
+        for msg in error_messages:
+            try:
+                error_element = WebDriverWait(driver, 2).until(
+                    EC.presence_of_element_located((By.XPATH, f"//*[contains(text(), '{msg}')]"))
+                )
+                if error_element.is_displayed():
+                    print(f"Tra cứu thất bại: {msg}")
+                    return 'fail'
+            except:
+                continue
+        
+        # Bước 2: Kiểm tra nút "Tải XML" (dấu hiệu thành công)
+        try:
+            btn_tai_xml = WebDriverWait(driver, 3).until(
+                EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Tải XML')]"))
+            )
+            if btn_tai_xml:
+                print("Tra cứu thành công - Tìm thấy nút 'Tải XML'")
+                return 'success'
+        except:
+            pass
+        
+        # Bước 3: Nếu không tìm thấy gì
+        print("Không thể xác định trạng thái tra cứu")
+        return 'unknown'
+        
+    except Exception as e:
+        print(f"Lỗi khi kiểm tra trạng thái: {e}")
+        return 'unknown'
 
 def process_invoice(df , download_path):
     """"xử lý từng loại hoá đơn"""
@@ -153,7 +202,6 @@ def Read_All_Xml_In_Folder(folder_path):
         file_path = os.path.join(folder_path, file_name)
         data_dict = read_xml_to_dict(file_path)
         
-
         # print(data_dict)
         info = extract_fpt_invoice_info(data_dict)
         if info:
@@ -164,48 +212,34 @@ def Read_All_Xml_In_Folder(folder_path):
     
 def extract_fpt_invoice_info(data_dict):
     try:
-        print(f"DEBUG: Root keys: {list(data_dict.keys())}")
-        
         # Trường hợp TDiep > DLieu > HDon
         if "TDiep" in data_dict:
-            print("DEBUG: Tìm thấy TDiep")
             dlieu = data_dict["TDiep"].get("DLieu", {})
             if not dlieu:
-                print("DEBUG: Không tìm thấy DLieu trong TDiep")
                 return None
             hdon = dlieu.get("HDon", {})
             if not hdon:
-                print("DEBUG: Không tìm thấy HDon trong DLieu")
                 return None
 
         # Trường hợp DLieu > HDon
         elif "DLieu" in data_dict:
-            print("DEBUG: Tìm thấy DLieu")
             hdon = data_dict["DLieu"].get("HDon", {})
             if not hdon:
-                print("DEBUG: Không tìm thấy HDon trong DLieu")
                 return None
 
         # Trường hợp bắt đầu luôn từ HDon
         elif "HDon" in data_dict:
-            print("DEBUG: Tìm thấy HDon")
             hdon = data_dict["HDon"]
         else:
-            print("DEBUG: Không tìm thấy thẻ HDon hợp lệ trong XML")
             return None
-
-        print(f"DEBUG: HDon keys: {list(hdon.keys())}")
         
         if "DLHDon" not in hdon:
-            print("DEBUG: Không tìm thấy DLHDon trong HDon")
             return None
             
         dlh = hdon["DLHDon"]
-        print(f"DEBUG: DLHDon có các key: {list(dlh.keys())}")
         
         ndhdon = dlh.get("NDHDon", {})
         if not ndhdon:
-            print("DEBUG: Không tìm thấy NDHDon")
             return None
             
         nban = ndhdon.get("NBan", {})
@@ -266,31 +300,49 @@ def create_output_file(df_input, xml_data_list):
     
     return df_output
 
-def process_all_xml_files(folder_path):
-    """Xử lý tất cả file XML và trả về danh sách thông tin"""
+def process_all_xml_files_by_ma_tra_cuu(folder_path, df_input):
+    """Xử lý file XML theo mã tra cứu từ file input để đảm bảo đúng thứ tự"""
     xml_data_list = []
     
     if not os.path.exists(folder_path):
         print(f"Thư mục {folder_path} không tồn tại")
-        return xml_data_list
+        return [None] * len(df_input)
     
+    # Lấy tất cả file XML
     xml_files = [f for f in os.listdir(folder_path) if f.endswith('.xml')]
     
-    for file_name in xml_files:
-        file_path = os.path.join(folder_path, file_name)
-        try:
-            data_dict = read_xml_to_dict(file_path)
-            info = extract_fpt_invoice_info(data_dict)
-            xml_data_list.append(info)
-            
-            if info:
-                print(f"\nFile: {file_name}")
-                for key, value in info.items():
-                    print(f"{key}: {value}")
-                print("-" * 50)
-        except Exception as e:
-            print(f"Lỗi khi xử lý file {file_name}: {e}")
-            xml_data_list.append(None)
+    # Duyệt từng dòng trong file input
+    for index, row in df_input.iterrows():
+        ma_tra_cuu = str(row['Mã tra cứu']).strip()
+        xml_data = None
+        
+        # Tìm file XML có tên chứa mã tra cứu
+        matching_file = None
+        for xml_file in xml_files:
+            if ma_tra_cuu in xml_file:
+                matching_file = xml_file
+                break
+        
+        if matching_file:
+            file_path = os.path.join(folder_path, matching_file)
+            try:
+                data_dict = read_xml_to_dict(file_path)
+                xml_data = extract_fpt_invoice_info(data_dict)
+                
+                if xml_data:
+                    print(f"\nDòng {index+1} - File: {matching_file}")
+                    print(f"Mã tra cứu: {ma_tra_cuu}")
+                    for key, value in xml_data.items():
+                        print(f"{key}: {value}")
+                    print("-" * 50)
+                else:
+                    print(f"Dòng {index+1} - Không thể trích xuất dữ liệu từ file: {matching_file}")
+            except Exception as e:
+                print(f"Lỗi khi xử lý file {matching_file} cho dòng {index+1}: {e}")
+        else:
+            print(f"Dòng {index+1} - Không tìm thấy file XML cho mã tra cứu: {ma_tra_cuu}")
+        
+        xml_data_list.append(xml_data)
     
     return xml_data_list
 
@@ -309,78 +361,16 @@ def main():
     #2. xử lý từng loại hoá đơn
     process_invoice(df, download_path)
     
-    #3. đọc tất cả file xml trong thư mục download và trích xuất thông tin
-    xml_data_list = process_all_xml_files(download_path)
+    #3. đọc tất cả file xml trong thư mục download và trích xuất thông tin theo đúng thứ tự
+    xml_data_list = process_all_xml_files_by_ma_tra_cuu(download_path, df)
     
     #4. tạo file output với thông tin đầy đủ
     df_output = create_output_file(df, xml_data_list)
     
     print(f"\nHoàn thành! Đã xử lý {len(xml_data_list)} file XML")
 
-def main_test():
-    """Hàm test chỉ tạo file output với dữ liệu mẫu"""
-    print("Chạy test tạo file output...")
-    test_create_output()
-
-def test_create_output():
-    """Test tạo file output mà không cần selenium"""
-    print("Test tạo file output...")
-    
-    # Đọc file input
-    df = handle_input()
-    print(f"Đã đọc {len(df)} dòng dữ liệu từ file input")
-    
-    # Tạo dữ liệu XML mẫu (giả lập)
-    xml_data_list = []
-    for i in range(len(df)):
-        xml_data = {
-            'Số hóa đơn': f'HD{i+1:03d}',
-            'Đơn vị bán hàng': f'Công ty ABC {i+1}',
-            'Mã số thuế bán': f'123456789{i+1:02d}',
-            'Địa chỉ bán': f'Địa chỉ {i+1}',
-            'Họ tên người mua hàng': f'Khách hàng {i+1}',
-            'Địa chỉ mua': f'Địa chỉ khách {i+1}',
-            'Mã số thuế mua': f'987654321{i+1:02d}',
-        }
-        xml_data_list.append(xml_data)
-    
-    # Tạo file output
-    df_output = create_output_file(df, xml_data_list)
-    print(f"Đã tạo file output với {len(df_output)} dòng dữ liệu")
-    
-    return df_output
-
-def test_xml_processing():
-    """Hàm test chỉ để xử lý XML có sẵn"""
-    # Đọc file input
-    df = handle_input()
-    print(f"Đã đọc {len(df)} dòng dữ liệu từ file input")
-    
-    # Xử lý XML có sẵn
-    download_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "download")
-    xml_data_list = process_all_xml_files(download_path)
-    
-    # Tạo file output
-    df_output = create_output_file(df, xml_data_list)
-    
-    print(f"\nHoàn thành! Đã xử lý {len(xml_data_list)} file XML")
-    return df_output
-
 if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) > 1 and sys.argv[1] == "test":
-        # Chạy test tạo file output với dữ liệu mẫu
-        print("Chạy test tạo file output...")
-        main_test()
-    elif len(sys.argv) > 1 and sys.argv[1] == "xml":
-        # Chạy test xử lý XML có sẵn
-        print("Chạy test xử lý XML có sẵn...")
-        test_xml_processing()
-    else:
-        # Chạy quy trình đầy đủ
-        print("Chạy quy trình download và tạo file output...")
-        main()
+    main()
 
 
 #---------------------------------------------------------------------------------
