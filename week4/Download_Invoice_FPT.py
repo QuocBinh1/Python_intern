@@ -66,63 +66,99 @@ def process_fpt_invoice(driver, url, ma_so_thue, ma_tra_cuu):
     
 def process_misa_invoice(driver, url, ma_so_thue, ma_tra_cuu):
     """"xử lý loại hoá đơn MISA"""
-    #1 mở trang web
-    driver.get(url)
+    try:
+        #1 mở trang web
+        driver.get(url)
+        time.sleep(2)
 
-    #2 nhập mã tra cứu
-    xpath_ma_tra_cuu = 'txtCode'
-    driver.find_element(By.ID,xpath_ma_tra_cuu ).send_keys(ma_tra_cuu)
+        #2 nhập mã tra cứu
+        xpath_ma_tra_cuu = 'txtCode'
+        driver.find_element(By.ID, xpath_ma_tra_cuu).send_keys(ma_tra_cuu)
 
-    #3 Click nút "Tra cứu"
-    Id_btn_search = 'btnSearchInvoice'
-    driver.find_element(By.ID, Id_btn_search ).click()
-    time.sleep(5)
+        #3 Click nút "Tra cứu"
+        Id_btn_search = 'btnSearchInvoice'
+        driver.find_element(By.ID, Id_btn_search).click()
+        time.sleep(5)
 
-    #download
-    driver.find_element(By.CLASS_NAME,"res-btn.download").click()
-    time.sleep(5) 
-    
-    # tải hoá đơn điện tử (PDF) về hệ thống cục bộ
-    # 5 tải hoá đơn , tra cứu thành công
-    driver.find_element(By.XPATH, "//div[contains(@class,'txt-download-xml')]").click()
-    time.sleep(1) 
-    print(f"Đã tải hóa đơn cho mã: {ma_tra_cuu}")
+        # Kiểm tra kết quả tra cứu
+        try:
+            # Kiểm tra có thông báo lỗi không
+            error_elements = driver.find_elements(By.XPATH, "//*[contains(text(), 'không tìm thấy') or contains(text(), 'không tồn tại') or contains(text(), 'lỗi')]")
+            if error_elements:
+                print(f"Tra cứu MISA thất bại cho mã: {ma_tra_cuu}")
+                return False
+                
+            #download
+            download_btn = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.CLASS_NAME, "res-btn.download"))
+            )
+            download_btn.click()
+            time.sleep(3) 
+            
+            # tải XML
+            xml_btn = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.XPATH, "//div[contains(@class,'txt-download-xml')]"))
+            )
+            xml_btn.click()
+            time.sleep(2)
+            print(f"Đã tải hóa đơn MISA thành công cho mã: {ma_tra_cuu}")
+            return True
+            
+        except Exception as e:
+            print(f"Lỗi khi tải XML MISA cho mã {ma_tra_cuu}: {e}")
+            return False
+            
+    except Exception as e:
+        print(f"Lỗi tổng quát khi xử lý MISA cho mã {ma_tra_cuu}: {e}")
+        return False
 
 def process_van_invoice(driver, url, ma_so_thue, ma_tra_cuu):
     """"xử lý loại hoá đơn VAN"""
-    #1 mở trang web
-    driver.get(url)
+    try:
+        #1 mở trang web
+        driver.get(url)
+        time.sleep(2)
 
-    #2 nhập mã tra cứu
-    xpath_ma_tra_cuu = "//input[@placeholder='Nhập Mã tra cứu Hóa đơn']" 
-    driver.find_element(By.XPATH, xpath_ma_tra_cuu).send_keys(ma_tra_cuu)
+        #2 nhập mã tra cứu
+        xpath_ma_tra_cuu = "//input[@placeholder='Nhập Mã tra cứu Hóa đơn']" 
+        driver.find_element(By.XPATH, xpath_ma_tra_cuu).send_keys(ma_tra_cuu)
 
-    #3 Click nút "Tra cứu"
-    xpath_btn_search = '//*[@id="Button1"]'
-    driver.find_element(By.XPATH, xpath_btn_search ).click()
-    time.sleep(5)
+        #3 Click nút "Tra cứu"
+        xpath_btn_search = '//*[@id="Button1"]'
+        driver.find_element(By.XPATH, xpath_btn_search).click()
+        time.sleep(5)
 
-    #download
-    #4. Chuyển vào iframe chứa hóa đơn
-    WebDriverWait(driver, 10).until(
-        EC.frame_to_be_available_and_switch_to_it((By.ID, "frameViewInvoice"))
-    )
+        # Kiểm tra có iframe không (dấu hiệu thành công)
+        try:
+            #4. Chuyển vào iframe chứa hóa đơn
+            WebDriverWait(driver, 10).until(
+                EC.frame_to_be_available_and_switch_to_it((By.ID, "frameViewInvoice"))
+            )
 
-    #5. click nút "Tải về" 
-    download_btn = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.ID, "btnDownload"))
-    )
-    download_btn.click()
-    time.sleep(3)
+            #5. click nút "Tải về" 
+            download_btn = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.ID, "btnDownload"))
+            )
+            download_btn.click()
+            time.sleep(3)
 
-    #6. Click vào nút "Tải XML"
-    link_xml = WebDriverWait(driver, 10).until(
-        EC.element_to_be_clickable((By.ID, "LinkDownXML"))
-    )
-    link_xml.click()
-
-    time.sleep(1)
-
+            #6. Click vào nút "Tải XML"
+            link_xml = WebDriverWait(driver, 10).until(
+                EC.element_to_be_clickable((By.ID, "LinkDownXML"))
+            )
+            link_xml.click()
+            time.sleep(2)
+            
+            print(f"Đã tải hóa đơn VAN thành công cho mã: {ma_tra_cuu}")
+            return True
+            
+        except Exception as e:
+            print(f"Tra cứu VAN thất bại cho mã {ma_tra_cuu}: {e}")
+            return False
+            
+    except Exception as e:
+        print(f"Lỗi tổng quát khi xử lý VAN cho mã {ma_tra_cuu}: {e}")
+        return False
 
 def check_load(driver):
     """Kiểm tra trạng thái tra cứu hóa đơn - Trả về 'success', 'fail', hoặc 'unknown'"""
@@ -147,7 +183,6 @@ def check_load(driver):
                     return 'fail'
             except:
                 continue
-        
         # Bước 2: Kiểm tra nút "Tải XML" (dấu hiệu thành công)
         try:
             btn_tai_xml = WebDriverWait(driver, 3).until(
@@ -202,64 +237,146 @@ def Read_All_Xml_In_Folder(folder_path):
         file_path = os.path.join(folder_path, file_name)
         data_dict = read_xml_to_dict(file_path)
         
-        # print(data_dict)
+        # Thử trích xuất với các loại hóa đơn khác nhau
         info = extract_fpt_invoice_info(data_dict)
+        invoice_type = "FPT"
+        
+        if not info:
+            info = extract_misa_invoice_info(data_dict)
+            invoice_type = "MISA"
+            
+        if not info:
+            info = extract_van_invoice_info(data_dict)
+            invoice_type = "VAN"
+            
         if info:
-            print(f"{file_name}")
+            print(f"{file_name} (Loại: {invoice_type})")
             for key , value in info.items():
                 print(f"{key}: {value}")
             print("-" * 100)
+        else:
+            print(f"{file_name} - Không thể trích xuất thông tin")
+            print("-" * 100)
     
 def extract_fpt_invoice_info(data_dict):
+    
+    # Trường hợp TDiep > DLieu > HDon
+    if "TDiep" in data_dict:
+        dlieu = data_dict["TDiep"].get("DLieu", {})
+        if not dlieu:
+            return None
+        hdon = dlieu.get("HDon", {})
+        if not hdon:
+            return None
+
+    # Trường hợp DLieu > HDon
+    elif "DLieu" in data_dict:
+        hdon = data_dict["DLieu"].get("HDon", {})
+        if not hdon:
+            return None
+
+    # Trường hợp bắt đầu luôn từ HDon
+    elif "HDon" in data_dict:
+        hdon = data_dict["HDon"]
+    else:
+        return None
+    
+    if "DLHDon" not in hdon:
+        return None
+        
+    dlh = hdon["DLHDon"]
+    
+    ndhdon = dlh.get("NDHDon", {})
+    if not ndhdon:
+        return None
+        
+    nban = ndhdon.get("NBan", {})
+    nmua = ndhdon.get("NMua", {})
+
+    info = {
+        "Số hóa đơn": dlh.get("TTChung", {}).get("SHDon"),
+        "Đơn vị bán hàng": nban.get("Ten"),
+        "Mã số thuế bán": nban.get("MST"),
+        "Địa chỉ bán": nban.get("DChi"),
+        "Họ tên người mua hàng": nmua.get("Ten"),
+        "Địa chỉ mua": nmua.get("DChi"),
+        "Mã số thuế mua": nmua.get("MST"),
+        
+    }
+    return info
+
+def extract_misa_invoice_info(data_dict):
+    """Trích xuất thông tin từ file XML hóa đơn MISA"""
     try:
-        # Trường hợp TDiep > DLieu > HDon
-        if "TDiep" in data_dict:
-            dlieu = data_dict["TDiep"].get("DLieu", {})
-            if not dlieu:
-                return None
-            hdon = dlieu.get("HDon", {})
-            if not hdon:
-                return None
-
-        # Trường hợp DLieu > HDon
-        elif "DLieu" in data_dict:
-            hdon = data_dict["DLieu"].get("HDon", {})
-            if not hdon:
-                return None
-
-        # Trường hợp bắt đầu luôn từ HDon
+        # Cấu trúc MISA thường là: Invoice > InvoiceData
+        if "Invoice" in data_dict:
+            invoice_data = data_dict["Invoice"]
         elif "HDon" in data_dict:
-            hdon = data_dict["HDon"]
+            invoice_data = data_dict["HDon"]
         else:
             return None
-        
-        if "DLHDon" not in hdon:
-            return None
             
-        dlh = hdon["DLHDon"]
+        # Thông tin chung về hóa đơn
+        general_info = invoice_data.get("TTChung", {})
         
-        ndhdon = dlh.get("NDHDon", {})
-        if not ndhdon:
-            return None
-            
-        nban = ndhdon.get("NBan", {})
-        nmua = ndhdon.get("NMua", {})
-
+        # Thông tin người bán
+        seller_info = invoice_data.get("NBan", {})
+        
+        # Thông tin người mua  
+        buyer_info = invoice_data.get("NMua", {})
+        
         info = {
-            "Số hóa đơn": dlh.get("TTChung", {}).get("SHDon"),
-            "Đơn vị bán hàng": nban.get("Ten"),
-            "Mã số thuế bán": nban.get("MST"),
-            "Địa chỉ bán": nban.get("DChi"),
-            "Họ tên người mua hàng": nmua.get("Ten"),
-            "Địa chỉ mua": nmua.get("DChi"),
-            "Mã số thuế mua": nmua.get("MST"),
-           
+            "Số hóa đơn": general_info.get("SHDon") or general_info.get("InvoiceNumber"),
+            "Đơn vị bán hàng": seller_info.get("Ten") or seller_info.get("Name"),
+            "Mã số thuế bán": seller_info.get("MST") or seller_info.get("TaxCode"),
+            "Địa chỉ bán": seller_info.get("DChi") or seller_info.get("Address"),
+            "Họ tên người mua hàng": buyer_info.get("Ten") or buyer_info.get("Name"),
+            "Địa chỉ mua": buyer_info.get("DChi") or buyer_info.get("Address"),
+            "Mã số thuế mua": buyer_info.get("MST") or buyer_info.get("TaxCode"),
         }
         return info
+        
     except Exception as e:
-        print(f"Lỗi khi trích xuất hóa đơn: {e}")
+        print(f"Lỗi khi trích xuất thông tin MISA: {e}")
         return None
 
+def extract_van_invoice_info(data_dict):
+    """Trích xuất thông tin từ file XML hóa đơn VAN"""
+    try:
+        # Cấu trúc VAN có thể khác, thường bắt đầu từ root khác
+        if "Envelope" in data_dict:
+            body = data_dict["Envelope"].get("Body", {})
+            invoice_data = body.get("Invoice", {}) or body.get("HDon", {})
+        elif "Invoice" in data_dict:
+            invoice_data = data_dict["Invoice"]
+        elif "HDon" in data_dict:
+            invoice_data = data_dict["HDon"]
+        else:
+            return None
+            
+        # Thông tin chung
+        header_info = invoice_data.get("Header", {}) or invoice_data.get("TTChung", {})
+        
+        # Thông tin người bán
+        seller_info = invoice_data.get("Seller", {}) or invoice_data.get("NBan", {})
+        
+        # Thông tin người mua
+        buyer_info = invoice_data.get("Buyer", {}) or invoice_data.get("NMua", {})
+        
+        info = {
+            "Số hóa đơn": header_info.get("InvoiceNo") or header_info.get("SHDon"),
+            "Đơn vị bán hàng": seller_info.get("CompanyName") or seller_info.get("Ten"),
+            "Mã số thuế bán": seller_info.get("TaxCode") or seller_info.get("MST"),
+            "Địa chỉ bán": seller_info.get("Address") or seller_info.get("DChi"),
+            "Họ tên người mua hàng": buyer_info.get("CompanyName") or buyer_info.get("Ten"),
+            "Địa chỉ mua": buyer_info.get("Address") or buyer_info.get("DChi"),
+            "Mã số thuế mua": buyer_info.get("TaxCode") or buyer_info.get("MST"),
+        }
+        return info
+        
+    except Exception as e:
+        print(f"Lỗi khi trích xuất thông tin VAN: {e}")
+        return None
 def create_output_file(df_input, xml_data_list):
     """Tạo file output_FPT.xlsx từ dữ liệu input và thông tin XML"""
     
@@ -314,6 +431,7 @@ def process_all_xml_files_by_ma_tra_cuu(folder_path, df_input):
     # Duyệt từng dòng trong file input
     for index, row in df_input.iterrows():
         ma_tra_cuu = str(row['Mã tra cứu']).strip()
+        url = str(row['URL']).strip()
         xml_data = None
         
         # Tìm file XML có tên chứa mã tra cứu
@@ -327,10 +445,31 @@ def process_all_xml_files_by_ma_tra_cuu(folder_path, df_input):
             file_path = os.path.join(folder_path, matching_file)
             try:
                 data_dict = read_xml_to_dict(file_path)
-                xml_data = extract_fpt_invoice_info(data_dict)
+                
+                # Chọn hàm trích xuất dựa vào URL
+                if "fpt" in url.lower():
+                    xml_data = extract_fpt_invoice_info(data_dict)
+                    invoice_type = "FPT"
+                elif "meinvoice" in url.lower() or "misa" in url.lower():
+                    xml_data = extract_misa_invoice_info(data_dict)
+                    invoice_type = "MISA"
+                elif "van.ehoadon" in url.lower() or "van" in url.lower():
+                    xml_data = extract_van_invoice_info(data_dict)
+                    invoice_type = "VAN"
+                else:
+                    # Thử các hàm theo thứ tự nếu không xác định được từ URL
+                    xml_data = extract_fpt_invoice_info(data_dict)
+                    if not xml_data:
+                        xml_data = extract_misa_invoice_info(data_dict)
+                        invoice_type = "MISA"
+                    if not xml_data:
+                        xml_data = extract_van_invoice_info(data_dict)
+                        invoice_type = "VAN"
+                    else:
+                        invoice_type = "FPT"
                 
                 if xml_data:
-                    print(f"\nDòng {index+1} - File: {matching_file}")
+                    print(f"\nDòng {index+1} - File: {matching_file} (Loại: {invoice_type})")
                     print(f"Mã tra cứu: {ma_tra_cuu}")
                     for key, value in xml_data.items():
                         print(f"{key}: {value}")
